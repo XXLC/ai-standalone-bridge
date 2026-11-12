@@ -8,6 +8,6 @@ Please do not open a public issue that contains exploit details. Use GitHub priv
 
 ## What this project is, and is not
 
-This repository documents and supports local messaging between AI coding agents (Claude Code, Codex, Gemini). Messages between agents can be acted on automatically if the receiving agent runs without approval prompts, and the sender identity of the Gemini side is self-declared and not verified. Read the trust model, the attack surface, the dangerous flag and the restricted-actions rules before use: [docs/en/SECURITY.md](docs/en/SECURITY.md) ([Vietnamese](docs/SECURITY.md)).
+This repository documents and supports local messaging and task delegation between AI coding agents (Claude Code, Codex, Gemini, and DeepSeek via Codewhale). Messages and delegated tasks between agents can be acted on automatically if the receiving agent runs without approval prompts, and the sender identity of the Gemini side is self-declared and not verified. Read the trust model, the attack surface, the dangerous flags (`--dangerously-skip-permissions`, `--auto`), API key protection, and the restricted-actions rules before use: [docs/en/SECURITY.md](docs/en/SECURITY.md) ([Vietnamese](docs/SECURITY.md)).
 
 Only a single Windows machine has been tested. Other environments are not tested.

@@ -1,8 +1,8 @@
-# claude-codex-gemini-bridge Setup Guide
+# ai-standalone-bridge Setup Guide
 
 [Tiếng Việt](../SETUP.md) | English
 
-This document explains how to set up a system connecting three locally running coding agents: Claude Code (Anthropic), Codex (OpenAI), and Gemini (Google, via Antigravity). In this model, Claude acts as the coordinator and also works directly on tasks; Codex and Gemini receive assigned tasks or take over forwarded work when another agent runs out of quota.
+This document explains how to set up a system connecting and delegating tasks across locally running coding agents: Claude Code (Anthropic), Codex (OpenAI), Gemini (Google, via Antigravity with Opus and Argon sessions), and DeepSeek (via the Codewhale CLI). In this model, Claude acts as the coordinator, verifier, and direct contributor for work requiring conversational context; four execution sessions (Codex, Gemini Opus, Gemini Argon, and DeepSeek) receive assigned tasks or take over forwarded work when another side runs out of quota or balance.
 
 ## Communication Overview
 
@@ -11,6 +11,7 @@ flowchart LR
     Claude["Claude Code (IDE Extension)"]
     Codex["Codex (CLI / IDE Extension)"]
     Gemini["Gemini (agy / Antigravity IDE)"]
+    DeepSeek["DeepSeek (Codewhale CLI: codewhale exec)"]
 
     Claude -- "send_to_codex (transport: terminal)" --> Codex
     Codex -- "send_to_claude" --> Claude
@@ -18,21 +19,23 @@ flowchart LR
     Gemini -- "MCP gemini-bridge: send_to_codex (codex queue)" --> Codex
     Claude -- "agy -p (new session)" --> Gemini
     Codex -- "shell: agy -p (new session)" --> Gemini
+    Claude -- "cd + codewhale exec (or src/deepseek-exec.mjs)" --> DeepSeek
 ```
 
 ## 1. Prerequisites and Environment Scope
 
 The only configuration tested in practice (`[VERIFIED]`):
 - Operating system: Windows 11 (single machine), using PowerShell.
-- Node.js: version `24.15` (the bridge requires Node `>= 20`).
+- Node.js: version `24.15` (the bridge and scripts require Node `>= 20`).
 - Claude Code: version `2.1.312` (extension running in VS Code and in Antigravity IDE).
 - Codex CLI: version `0.165.0` (installed via `npm`, with the IDE extension).
 - Antigravity CLI (`agy`): version `1.4.10`.
+- Codewhale CLI (`codewhale`): version `0.10.2` (formerly `deepseek-tui`, installed via `npm`, default provider `deepseek`, default model `deepseek-flash` / DeepSeek V4.1 Flash and `deepseek-v4-pro`).
 
 Warnings about other operating systems and environments:
 - macOS, Linux, other Windows machines, and other IDEs are all `[NOT TESTED]`.
 - The path to the bridge library in this repo is parameterized (`BRIDGE_LIB_DIR`), but the installation commands below are written for Windows. The upstream bridge claims macOS support over SSH, but that feature is `[NOT TESTED]` within the scope of this document.
-- All steps below that use PowerShell commands, Windows-style paths (`~`, `%LOCALAPPDATA%`, `codex.exe`, `agy.exe`), and Task Scheduler have only been performed on Windows and are `[NOT TESTED]` on other operating systems.
+- All steps below that use PowerShell commands, Windows-style paths (`~`, `%LOCALAPPDATA%`, `%APPDATA%\npm`, `codex.exe`, `agy.exe`, `codewhale.cmd`), and Task Scheduler have only been performed on Windows and are `[NOT TESTED]` on other operating systems.
 
 ## 2. Installing KeeVeeG's Bridge (Claude <-> Codex)
 
@@ -159,7 +162,9 @@ On Windows (other operating systems `[NOT TESTED]`):
   - Stop the Codex daemon process.
   - Uninstall the global `@openai/codex` package using `npm`.
 
-## 4. Installing Antigravity CLI (agy)
+## 4. Installing Antigravity CLI (agy) and Codewhale CLI (codewhale)
+
+### 4.1. Installing Antigravity CLI (agy)
 
 Starting 2026-06-18, Google stopped serving AI Pro and Ultra tiers through the Gemini CLI (`gemini`) and returns `IneligibleTierError`, requiring a switch to Antigravity CLI (`agy`) (`[VERIFIED]`).
 
@@ -186,14 +191,40 @@ agy models
   - Delete the `%LOCALAPPDATA%\agy\bin` directory (or the entire `%LOCALAPPDATA%\agy` directory).
   - Remove `%LOCALAPPDATA%\agy\bin` from the user-level `PATH` variable.
 
+### 4.2. Installing Codewhale CLI (codewhale) for DeepSeek
+
+Codewhale (`0.10.2`, formerly `deepseek-tui`) provides the `codewhale` command to run non-interactive DeepSeek execution sessions via `codewhale exec` (`[VERIFIED]`).
+
+Installation command via `npm`:
+
+```powershell
+npm i -g codewhale
+codewhale --version
+```
+
+On Windows, the global `npm` package places the launcher script at `%APPDATA%\npm\codewhale.cmd` (if a child process is missing the `npm` entry in `PATH`, invoke `& "$env:APPDATA\npm\codewhale.cmd"` directly).
+
+Provider and API key configuration:
+- The default provider is already `deepseek`, the default model is `deepseek-flash` (DeepSeek V4.1 Flash, 1M-token context, up to 384K output tokens), and `deepseek-v4-pro` is also available.
+- Codewhale resolves the API key in this order: configuration file -> secret store `<HOME>/.codewhale/secrets/secrets.json` (formatted as `{"entries": {"deepseek": "sk-..."}}`) -> `DEEPSEEK_API_KEY` environment variable. Storing the key in Codewhale's secret store and never passing keys on the command line is recommended.
+- Disable telemetry in Codewhale's configuration and set `CODEWHALE_NO_UPDATE_CHECK=1` during automated invocations to skip update checks.
+- The DeepSeek API provides an OpenAI-compatible `base_url` at `https://api.deepseek.com` and an Anthropic-compatible endpoint at `https://api.deepseek.com/anthropic`. Account balance can be checked via `GET https://api.deepseek.com/user/balance` with an `Authorization: Bearer <key>` header (`[VERIFIED]`, returning `is_available` and `balance_infos` with `currency`, `total_balance`, `granted_balance`, `topped_up_balance`).
+
+- Where it writes:
+  - The global `npm` package directory (`%APPDATA%\npm` on Windows).
+  - Configuration and secret store directory `<HOME>/.codewhale/`.
+- How to undo:
+  - Uninstall the package with `npm uninstall -g codewhale`.
+  - Delete `<HOME>/.codewhale/` if you want to remove saved configurations and keys.
+
 ## 5. Cloning This Repo and Registering the gemini-bridge MCP Server
 
-### 5.1. Clone the claude-codex-gemini-bridge Repo
+### 5.1. Clone the ai-standalone-bridge Repo
 
 Clone this repo into `<repo directory>` and run the test suite (no package installation needed):
 
 ```powershell
-git clone https://github.com/XXLC/claude-codex-gemini-bridge <repo directory>
+git clone https://github.com/XXLC/ai-standalone-bridge <repo directory>
 cd <repo directory>
 npm test
 ```
@@ -201,8 +232,9 @@ npm test
 If you place KeeVeeG's bridge directory right next to this repo directory under the name `codex-claude-desktop-bridge`, the code finds its `lib/` automatically. If you place it elsewhere, or want to be explicit, set `BRIDGE_LIB_DIR` to point to the bridge's `lib` directory (see usage in steps 5.2 and 5.3). Once `BRIDGE_LIB_DIR` is set, the sibling directory is no longer used as a fallback. The code selects only one directory (the environment variable if set, otherwise the sibling directory). If the selected directory does not exist, the message-sending tools return a Vietnamese error stating both the `BRIDGE_LIB_DIR` value and the sibling directory path, along with instructions on how to set the variable.
 
 Main components in the repo:
-- `src/gemini-bridge-mcp.mjs`: An MCP server communicating over `stdio`, written in Node with no external dependencies. Provides Gemini with 4 tools: `list_claude_sessions`, `send_to_claude`, `list_codex_chats`, `send_to_codex`. This file reuses functions from the bridge's `lib` directory (`resolveClaudeSession`, `sendToClaude`, `discoverClaudeSessions` in `lib/claude-desktop.mjs`; `openDaemon`, `listTerminalThreads`, `queueToTerminalThread` in `lib/codex-daemon.mjs`) via the `BRIDGE_LIB_DIR` environment variable. (`[VERIFIED: `npm test` passes on Windows with Node 24.15 (see README, Running tests section); the live send case only runs when `SESSION_ID` and `BRIDGE_LIB_DIR` are set manually]`).
+- `src/gemini-bridge-mcp.mjs`: An MCP server communicating over `stdio`, written in Node with no external dependencies. Provides Gemini with 4 tools: `list_claude_sessions`, `send_to_claude`, `list_codex_chats`, `send_to_codex`. This file reuses functions from the bridge's `lib` directory (`resolveClaudeSession`, `sendToClaude`, `discoverClaudeSessions` in `lib/claude-desktop.mjs`; `openDaemon`, `listTerminalThreads`, `queueToTerminalThread` in `lib/codex-daemon.mjs`) via the `BRIDGE_LIB_DIR` environment variable. (`[VERIFIED: npm test passes on Windows with Node 24.15 (see README, Running tests section); the live send case only runs when SESSION_ID and BRIDGE_LIB_DIR are set manually]`).
 - `src/gemini-send-to-claude.mjs`: Fallback CLI script to send a message to a Claude session when not using MCP.
+- `src/deepseek-exec.mjs`: CLI wrapper around `codewhale exec` accepting `--cwd`, `--prompt-file` or `--prompt`, `--auto`, `--sandbox`, `--model`, `--timeout`, classifying results (`ok`, `quota_or_balance` for `402`/`429`, `other_error`), and refusing/redacting API keys (`[VERIFIED: npm test passes with a fake codewhale on PATH]`).
 
 - Where it writes: The `<repo directory>` folder.
 - How to undo: Delete the `<repo directory>` folder.
@@ -259,17 +291,18 @@ Step 3: Verify that the JSON file is valid after saving, then restart Antigravit
 
 ## 6. Placing Instruction Templates from templates/ into the Three User-Level Configuration Files
 
-The `templates/` directory contains the "agent coordination" instruction block enclosed between the HTML comment lines `<!-- dieu-phoi-agent:bat-dau -->` and `<!-- dieu-phoi-agent:ket-thuc -->` to apply across all of the user's projects.
+The `templates/` directory contains the "agent coordination" instruction block (covering Codex, Gemini, and DeepSeek) enclosed between the HTML comment lines `<!-- dieu-phoi-agent:bat-dau -->` and `<!-- dieu-phoi-agent:ket-thuc -->` to apply across all of the user's projects.
 
 How each tool reads its configuration:
 - Claude reads `<HOME>/.claude/CLAUDE.md` (`~/.claude/CLAUDE.md`).
 - Codex only reads `AGENTS.md`, located at `<HOME>/.codex/AGENTS.md` (`~/.codex/AGENTS.md`).
 - Antigravity cumulatively loads both `AGENTS.md` and `GEMINI.md` from the directory containing the currently open file up to the workspace root and truncates each file at 24,000 bytes; the user-level file is located at `<HOME>/.gemini/GEMINI.md` (`~/.gemini/GEMINI.md`).
+- Codewhale (`codewhale exec`) runs inside the project directory and reads project rule files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) when instructed in the prompt.
 
 Steps to perform:
 1. Back up `<HOME>/.claude/CLAUDE.md`, `<HOME>/.codex/AGENTS.md`, and `<HOME>/.gemini/GEMINI.md` if they already exist.
 2. Copy the content block between `<!-- dieu-phoi-agent:bat-dau -->` and `<!-- dieu-phoi-agent:ket-thuc -->` from the template files in `templates/` into the three corresponding target files.
-3. In the copied content, find and replace all placeholder paths (such as `<HOME>`, `<bridge directory>`, `<path to codex.exe>`) with the actual paths on your machine.
+3. In the copied content, find and replace all placeholder paths (such as `<HOME>`, `<bridge directory>`, `<ĐƯỜNG_DẪN_CODEX>`, `<ĐƯỜNG_DẪN_AGY>`, `<ĐƯỜNG_DẪN_CODEWHALE>`) with the actual paths on your machine.
 
 - Where it writes:
   - `<HOME>/.claude/CLAUDE.md`
@@ -328,7 +361,8 @@ The table below lists each communication direction and how to test it (all CLI c
 | Gemini -> Codex | In a Gemini session, call `list_codex_chats` and then `send_to_codex` from the `gemini-bridge` MCP server (messages go through `codex queue`). | `[VERIFIED]` (unclear when the Codex side reads the queue; latency in the extension has not been measured) |
 | Claude -> Gemini | From Claude, run a command to open a new Gemini session: `agy --model <m> --print-timeout <t> [--dangerously-skip-permissions] -p $prompt` (or `-p "<prompt>"`). | `[VERIFIED]` |
 | Codex -> Gemini | From Codex, run a shell command: `agy --model <m> --print-timeout <t> [--dangerously-skip-permissions] -p $prompt` (or `-p "<prompt>"`). | `[VERIFIED]` |
+| Claude / Codex / Gemini -> DeepSeek | Change into the working directory and run `codewhale exec [--auto] [--sandbox workspace-write] [--model deepseek-flash\|deepseek-v4-pro] -- "<prompt>"`, or call `node <repo directory>/src/deepseek-exec.mjs --cwd <directory> --prompt-file <file> [--auto] [--sandbox workspace-write] [--model <m>]`. | `[VERIFIED]` command invocation; live `402`/`429` balance exhaustion: `[NOT TESTED]` |
 
 Verification notes:
 - None of the communication directions provide read receipts (`acknowledged: false`).
-- An already-open Gemini conversation in the IDE has no inbox for pushed messages; Gemini only receives work when invoked via `agy -p` (opening a new session) or when it actively calls an MCP tool.
+- An already-open Gemini conversation in the IDE and DeepSeek (Codewhale) sessions have no inbox for pushed messages; Gemini only receives work when invoked via `agy -p` (or when it actively calls an MCP tool), while DeepSeek only receives one-shot tasks via `codewhale exec`.

@@ -1,5 +1,5 @@
 {
-  "name": "claude-codex-gemini-bridge",
+  "name": "ai-standalone-bridge",
   "version": "0.1.0",
   "private": false,
   "type": "module",
@@ -8,6 +8,6 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test test/gemini-bridge-mcp.test.mjs extras/redact-secrets/redact-secrets.test.mjs"
+    "test": "node --test test/gemini-bridge-mcp.test.mjs test/deepseek-exec.test.mjs extras/redact-secrets/redact-secrets.test.mjs"
   }
 }

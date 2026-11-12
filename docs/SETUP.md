@@ -1,8 +1,8 @@
-# Hướng dẫn cài đặt claude-codex-gemini-bridge
+# Hướng dẫn cài đặt ai-standalone-bridge
 
 Tiếng Việt | [English](en/SETUP.md)
 
-Tài liệu này hướng dẫn cài đặt hệ thống kết nối ba agent lập trình chạy cục bộ: Claude Code (Anthropic), Codex (OpenAI) và Gemini (Google, qua Antigravity). Trong mô hình này, Claude là agent điều phối và trực tiếp làm việc; Codex và Gemini nhận phần việc được giao hoặc nhận việc chuyển tiếp khi một bên hết quota.
+Tài liệu này hướng dẫn cài đặt hệ thống kết nối và giao việc giữa các agent lập trình chạy cục bộ: Claude Code (Anthropic), Codex (OpenAI), Gemini (Google, qua Antigravity với phiên Opus và phiên Argon) và DeepSeek (qua Codewhale CLI). Trong mô hình này, Claude là agent điều phối, kiểm chứng và trực tiếp làm phần việc cần ngữ cảnh hội thoại; bốn phiên thực hiện (Codex, Gemini Opus, Gemini Argon, DeepSeek) nhận phần việc được giao hoặc nhận việc chuyển tiếp khi một bên hết quota hay hết số dư.
 
 ## Sơ đồ liên lạc tổng quan
 
@@ -11,6 +11,7 @@ flowchart LR
     Claude["Claude Code (Extension IDE)"]
     Codex["Codex (CLI / Extension IDE)"]
     Gemini["Gemini (agy / Antigravity IDE)"]
+    DeepSeek["DeepSeek (Codewhale CLI: codewhale exec)"]
 
     Claude -- "send_to_codex (transport: terminal)" --> Codex
     Codex -- "send_to_claude" --> Claude
@@ -18,21 +19,23 @@ flowchart LR
     Gemini -- "MCP gemini-bridge: send_to_codex (codex queue)" --> Codex
     Claude -- "agy -p (phiên mới)" --> Gemini
     Codex -- "shell: agy -p (phiên mới)" --> Gemini
+    Claude -- "cd + codewhale exec (hoặc src/deepseek-exec.mjs)" --> DeepSeek
 ```
 
 ## 1. Điều kiện cần và phạm vi môi trường
 
 Cấu hình duy nhất đã kiểm thực tế (`[ĐÃ KIỂM]`):
 - Hệ điều hành: Windows 11 (trên một máy), sử dụng PowerShell.
-- Node.js: phiên bản `24.15` (bridge yêu cầu Node `>= 20`).
+- Node.js: phiên bản `24.15` (bridge và bộ script yêu cầu Node `>= 20`).
 - Claude Code: phiên bản `2.1.312` (extension chạy trong VS Code và trong Antigravity IDE).
 - Codex CLI: phiên bản `0.165.0` (cài bằng `npm`, có extension trong IDE).
 - Antigravity CLI (`agy`): phiên bản `1.4.10`.
+- Codewhale CLI (`codewhale`): phiên bản `0.10.2` (trước đây tên `deepseek-tui`, cài bằng `npm`, nhà cung cấp mặc định `deepseek`, model mặc định `deepseek-flash` / DeepSeek V4.1 Flash và `deepseek-v4-pro`).
 
 Cảnh báo về hệ điều hành và môi trường khác:
 - Các hệ điều hành macOS, Linux, máy Windows khác hoặc IDE khác đều ở trạng thái `[CHƯA KIỂM]`.
 - Đường dẫn tới thư viện của bridge trong repo này đã tham số hóa (`BRIDGE_LIB_DIR`), nhưng các lệnh cài đặt dưới đây viết cho Windows. Bridge gốc có tuyên bố hỗ trợ macOS qua SSH nhưng tính năng đó `[CHƯA KIỂM]` trong phạm vi tài liệu này.
-- Mọi bước bên dưới có dùng lệnh PowerShell, đường dẫn kiểu Windows (`~`, `%LOCALAPPDATA%`, `codex.exe`, `agy.exe`) và Task Scheduler đều mới chỉ được thực hiện trên Windows và `[CHƯA KIỂM]` ở hệ điều hành khác.
+- Mọi bước bên dưới có dùng lệnh PowerShell, đường dẫn kiểu Windows (`~`, `%LOCALAPPDATA%`, `%APPDATA%\npm`, `codex.exe`, `agy.exe`, `codewhale.cmd`) và Task Scheduler đều mới chỉ được thực hiện trên Windows và `[CHƯA KIỂM]` ở hệ điều hành khác.
 
 ## 2. Cài đặt bridge của KeeVeeG (Claude <-> Codex)
 
@@ -159,7 +162,9 @@ Trên Windows (hệ điều hành khác `[CHƯA KIỂM]`):
   - Dừng tiến trình daemon Codex.
   - Gỡ gói toàn cục `@openai/codex` bằng `npm`.
 
-## 4. Cài đặt Antigravity CLI (agy)
+## 4. Cài đặt Antigravity CLI (agy) và Codewhale CLI (codewhale)
+
+### 4.1. Cài đặt Antigravity CLI (agy)
 
 Từ ngày 2026-06-18, Google ngừng phục vụ gói AI Pro và Ultra qua Gemini CLI (`gemini`) và trả về lỗi `IneligibleTierError`, bắt buộc chuyển sang dùng Antigravity CLI (`agy`) (`[ĐÃ KIỂM]`).
 
@@ -186,14 +191,40 @@ agy models
   - Xóa thư mục `%LOCALAPPDATA%\agy\bin` (hoặc toàn bộ `%LOCALAPPDATA%\agy`).
   - Xóa đường dẫn `%LOCALAPPDATA%\agy\bin` khỏi biến `PATH` cấp người dùng.
 
+### 4.2. Cài đặt Codewhale CLI (codewhale) cho DeepSeek
+
+Codewhale (`0.10.2`, trước đây tên `deepseek-tui`) cung cấp lệnh `codewhale` để chạy phiên thực hiện DeepSeek không tương tác qua `codewhale exec` (`[ĐÃ KIỂM]`).
+
+Lệnh cài đặt qua `npm`:
+
+```powershell
+npm i -g codewhale
+codewhale --version
+```
+
+Trên Windows, gói toàn cục của `npm` đặt script khởi chạy tại `%APPDATA%\npm\codewhale.cmd` (nếu tiến trình con thiếu mục `npm` trong `PATH` thì gọi trực tiếp `& "$env:APPDATA\npm\codewhale.cmd"`).
+
+Cấu hình nhà cung cấp và khóa API:
+- Nhà cung cấp mặc định đã là `deepseek`, model mặc định là `deepseek-flash` (DeepSeek V4.1 Flash, ngữ cảnh 1M token, đầu ra tối đa 384K token) và có thêm `deepseek-v4-pro`.
+- Codewhale tra khóa API theo thứ tự: tệp cấu hình -> kho bí mật `<HOME>/.codewhale/secrets/secrets.json` (có dạng `{"entries": {"deepseek": "sk-..."}}`) -> biến môi trường `DEEPSEEK_API_KEY`. Khuyến nghị lưu khóa trong kho bí mật của Codewhale và không đặt khóa trên dòng lệnh.
+- Tắt telemetry trong cấu hình của Codewhale và đặt biến môi trường `CODEWHALE_NO_UPDATE_CHECK=1` khi gọi tự động để tắt kiểm tra cập nhật.
+- API của DeepSeek có `base_url` tương thích OpenAI tại `https://api.deepseek.com` và tương thích Anthropic tại `https://api.deepseek.com/anthropic`. Có thể kiểm tra số dư tài khoản bằng yêu cầu `GET https://api.deepseek.com/user/balance` kèm header `Authorization: Bearer <khóa>` (`[ĐÃ KIỂM]`, trả về `is_available` và `balance_infos` gồm `currency`, `total_balance`, `granted_balance`, `topped_up_balance`).
+
+- Ghi vào đâu:
+  - Thư mục gói toàn cục của `npm` (`%APPDATA%\npm` trên Windows).
+  - Thư mục cấu hình và kho bí mật `<HOME>/.codewhale/`.
+- Cách hoàn tác:
+  - Gỡ gói bằng `npm uninstall -g codewhale`.
+  - Xóa thư mục `<HOME>/.codewhale/` nếu muốn gỡ bỏ cấu hình và khóa đã lưu.
+
 ## 5. Lấy mã repo này và đăng ký MCP gemini-bridge
 
-### 5.1. Lấy mã nguồn repo claude-codex-gemini-bridge
+### 5.1. Lấy mã nguồn repo ai-standalone-bridge
 
 Tải mã nguồn của repo này về `<thư mục repo>` và chạy thử bộ test (không cần cài gói):
 
 ```powershell
-git clone https://github.com/XXLC/claude-codex-gemini-bridge <thư mục repo>
+git clone https://github.com/XXLC/ai-standalone-bridge <thư mục repo>
 cd <thư mục repo>
 npm test
 ```
@@ -201,8 +232,9 @@ npm test
 Nếu bạn đặt thư mục bridge của KeeVeeG ngay cạnh thư mục repo này với tên `codex-claude-desktop-bridge`, mã tự tìm thấy `lib/` của nó. Nếu đặt ở chỗ khác, hoặc muốn rõ ràng, đặt biến `BRIDGE_LIB_DIR` trỏ tới thư mục `lib` của bridge (cách dùng ở các bước 5.2 và 5.3). Khi đã đặt `BRIDGE_LIB_DIR` thì thư mục anh em không còn được dùng thay thế. Mã chỉ chọn một thư mục (biến nếu có, không thì thư mục anh em). Nếu thư mục được chọn không tồn tại, các công cụ gửi tin trả lỗi tiếng Việt nêu cả giá trị `BRIDGE_LIB_DIR` lẫn đường dẫn thư mục anh em và cách đặt biến.
 
 Các thành phần chính trong repo gồm:
-- `src/gemini-bridge-mcp.mjs`: Máy chủ MCP giao tiếp qua `stdio`, viết bằng Node, không có phụ thuộc ngoài. Cung cấp cho Gemini 4 công cụ: `list_claude_sessions`, `send_to_claude`, `list_codex_chats`, `send_to_codex`. Tệp này dùng lại các hàm trong thư mục `lib` của bridge (`resolveClaudeSession`, `sendToClaude`, `discoverClaudeSessions` trong `lib/claude-desktop.mjs`; `openDaemon`, `listTerminalThreads`, `queueToTerminalThread` trong `lib/codex-daemon.mjs`) thông qua biến môi trường `BRIDGE_LIB_DIR`. (`[ĐÃ KIỂM: `npm test` đạt trên Windows với Node 24.15 (xem README, mục Chạy kiểm thử); ca gửi thật chỉ chạy khi tự đặt `SESSION_ID` và `BRIDGE_LIB_DIR`]`).
+- `src/gemini-bridge-mcp.mjs`: Máy chủ MCP giao tiếp qua `stdio`, viết bằng Node, không có phụ thuộc ngoài. Cung cấp cho Gemini 4 công cụ: `list_claude_sessions`, `send_to_claude`, `list_codex_chats`, `send_to_codex`. Tệp này dùng lại các hàm trong thư mục `lib` của bridge (`resolveClaudeSession`, `sendToClaude`, `discoverClaudeSessions` trong `lib/claude-desktop.mjs`; `openDaemon`, `listTerminalThreads`, `queueToTerminalThread` trong `lib/codex-daemon.mjs`) thông qua biến môi trường `BRIDGE_LIB_DIR`. (`[ĐÃ KIỂM: npm test đạt trên Windows với Node 24.15 (xem README, mục Chạy kiểm thử); ca gửi thật chỉ chạy khi tự đặt SESSION_ID và BRIDGE_LIB_DIR]`).
 - `src/gemini-send-to-claude.mjs`: Script dự phòng để gửi một tin tới một phiên Claude bằng dòng lệnh khi không dùng MCP.
+- `src/deepseek-exec.mjs`: Script dòng lệnh bọc `codewhale exec`, nhận `--cwd`, `--prompt-file` hoặc `--prompt`, `--auto`, `--sandbox`, `--model`, `--timeout`, phân loại kết quả (`ok`, `quota_or_balance` cho `402`/`429`, `other_error`) và không nhận/in khóa API (`[ĐÃ KIỂM: npm test đạt với codewhale giả trên PATH]`).
 
 - Ghi vào đâu: Thư mục `<thư mục repo>`.
 - Cách hoàn tác: Xóa thư mục `<thư mục repo>`.
@@ -259,17 +291,18 @@ Bước 3: Kiểm tra tệp JSON hợp lệ sau khi ghi, rồi khởi động l�
 
 ## 6. Đặt mẫu hướng dẫn từ templates/ vào ba tệp cấu hình cấp người dùng
 
-Thư mục `templates/` chứa khối hướng dẫn "điều phối agent" nằm giữa hai dòng thẻ HTML `<!-- dieu-phoi-agent:bat-dau -->` và `<!-- dieu-phoi-agent:ket-thuc -->` để áp dụng cho mọi project của người dùng.
+Thư mục `templates/` chứa khối hướng dẫn "điều phối agent" (bao gồm cả Codex, Gemini và DeepSeek) nằm giữa hai dòng thẻ HTML `<!-- dieu-phoi-agent:bat-dau -->` và `<!-- dieu-phoi-agent:ket-thuc -->` để áp dụng cho mọi project của người dùng.
 
 Cơ chế đọc cấu hình của từng công cụ:
 - Claude đọc `<HOME>/.claude/CLAUDE.md` (`~/.claude/CLAUDE.md`).
 - Codex chỉ đọc `AGENTS.md`, đặt tại `<HOME>/.codex/AGENTS.md` (`~/.codex/AGENTS.md`).
 - Antigravity nạp cộng dồn cả `AGENTS.md` và `GEMINI.md` từ thư mục chứa tệp đang mở ngược lên tới gốc workspace và cắt mỗi tệp ở 24.000 byte; tệp cấp người dùng đặt tại `<HOME>/.gemini/GEMINI.md` (`~/.gemini/GEMINI.md`).
+- Codewhale (`codewhale exec`) chạy tại thư mục project và đọc các tệp quy tắc của project (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) khi lời nhắc yêu cầu.
 
 Các bước thực hiện:
 1. Sao lưu cả ba tệp `<HOME>/.claude/CLAUDE.md`, `<HOME>/.codex/AGENTS.md` và `<HOME>/.gemini/GEMINI.md` nếu chúng đã tồn tại.
 2. Chép khối nội dung nằm giữa hai dòng thẻ `<!-- dieu-phoi-agent:bat-dau -->` và `<!-- dieu-phoi-agent:ket-thuc -->` từ các tệp mẫu trong `templates/` vào ba tệp đích tương ứng.
-3. Trong nội dung vừa chép, tìm và thay thế toàn bộ các đường dẫn giữ chỗ (như `<HOME>`, `<thư mục bridge>`, `<đường dẫn codex.exe>`) bằng đường dẫn thực tế trên máy của bạn.
+3. Trong nội dung vừa chép, tìm và thay thế toàn bộ các đường dẫn giữ chỗ (như `<HOME>`, `<thư mục bridge>`, `<ĐƯỜNG_DẪN_CODEX>`, `<ĐƯỜNG_DẪN_AGY>`, `<ĐƯỜNG_DẪN_CODEWHALE>`) bằng đường dẫn thực tế trên máy của bạn.
 
 - Ghi vào đâu:
   - `<HOME>/.claude/CLAUDE.md`
@@ -328,7 +361,8 @@ Bảng dưới đây liệt kê các chiều liên lạc và cách kiểm tra t�
 | Gemini -> Codex | Trong phiên Gemini, gọi công cụ `list_codex_chats` rồi `send_to_codex` của MCP `gemini-bridge` (tin đi qua `codex queue`). | `[ĐÃ KIỂM]` (chưa rõ phía Codex đọc lúc nào, chưa đo độ trễ trong extension) |
 | Claude -> Gemini | Từ Claude, chạy lệnh mở một phiên Gemini mới: `agy --model <m> --print-timeout <t> [--dangerously-skip-permissions] -p $prompt` (hoặc `-p "<lời nhắc>"`). | `[ĐÃ KIỂM]` |
 | Codex -> Gemini | Từ Codex, dùng lệnh shell chạy: `agy --model <m> --print-timeout <t> [--dangerously-skip-permissions] -p $prompt` (hoặc `-p "<lời nhắc>"`). | `[ĐÃ KIỂM]` |
+| Claude / Codex / Gemini -> DeepSeek | Chuyển vào thư mục làm việc rồi chạy `codewhale exec [--auto] [--sandbox workspace-write] [--model deepseek-flash\|deepseek-v4-pro] -- "<lời nhắc>"`, hoặc gọi `node <thư mục repo>/src/deepseek-exec.mjs --cwd <thư mục> --prompt-file <tệp> [--auto] [--sandbox workspace-write] [--model <m>]`. | `[ĐÃ KIỂM]` gọi lệnh; lỗi `402`/`429` khi hết tiền thật: `[CHƯA KIỂM]` |
 
 Lưu ý khi kiểm tra:
 - Không chiều liên lạc nào có xác nhận đã đọc (`acknowledged: false`).
-- Hội thoại Gemini đang mở sẵn trong IDE không có hộp thư nhận tin đẩy vào; Gemini chỉ nhận việc khi được gọi bằng `agy -p` (mở phiên mới) hoặc khi tự chạy công cụ MCP.
+- Hội thoại Gemini đang mở sẵn trong IDE và phiên DeepSeek (Codewhale) không có hộp thư nhận tin đẩy vào; Gemini chỉ nhận việc khi được gọi bằng `agy -p` (hoặc khi tự chạy công cụ MCP), còn DeepSeek chỉ nhận việc một lần qua `codewhale exec`.
