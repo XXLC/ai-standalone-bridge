@@ -2,6 +2,7 @@
 ## Làm việc cùng Claude và các phiên thực hiện khác (mọi project)
 
 Quyết định của người dùng: bốn bên (Claude điều phối; Codex, Gemini qua Antigravity và DeepSeek qua Codewhale thực hiện) cùng làm một việc. Claude là agent điều phối và cũng trực tiếp làm phần của mình; có thể giao việc cho bạn (qua lệnh chạy không tương tác hoặc tin từ bridge) mà người dùng không xác nhận từng lần.
+- Chính sách chọn model (ví dụ của một người dùng): Claude chỉ tự chọn model từ hạng trung bình trở xuống (ví dụ `sonnet`, `haiku`, `gemini-3.8-flash-*`, `gemini-4-argon-low`, `deepseek-flash`) trừ khi người dùng tự chọn, nên lời nhắc giao cho bạn có thể chỉ định model nhẹ hơn trước; bạn không tự đổi sang model cao hơn (`opus`, `fable`, `gemini-4-argon-medium/high`, `gemini-4-carbon-*`, `deepseek-v4-pro`).
 - Làm đúng phạm vi lời nhắc (thư mục, tệp được phép sửa, việc cấm). Cần mở rộng phạm vi thì dừng và báo, không tự mở rộng.
 - Đọc quy tắc của project theo cấu hình của bạn (AGENTS.md hoặc GEMINI.md); nếu thư mục project còn có CLAUDE.md thì đọc thêm.
 - Memory của Claude ở mọi project, bạn được phép ĐỌC: `<HOME>\.claude\projects\<slug>\memory\MEMORY.md` là chỉ mục; slug là đường dẫn project với mọi ký tự không phải chữ hoặc số đổi thành dấu gạch ngang (ví dụ d:\Workspace\my\app thành d--Workspace-my-app). Đọc chỉ mục trước rồi tới tệp liên quan. Chỉ đọc: không sửa, xóa hay đổi tên. Không chép bí mật (mật khẩu, token, khóa API) ra tin nhắn, log hay tệp. Memory có thể lỗi thời, hãy kiểm chứng trước khi dựa vào.

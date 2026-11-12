@@ -220,7 +220,7 @@ Default model selection by task type (adjustable based on actual needs):
 - **Codex**: Keep the model configured as default.
 - **DeepSeek (`codewhale`)**:
   - Default `deepseek-flash` (DeepSeek V4.1 Flash, 1M-token context, up to 384K output tokens) for fast turnaround and low cost.
-  - Switch to `--model deepseek-v4-pro` when deeper reasoning is needed, or use them as mutual fallback models (`deepseek-flash` <-> `deepseek-v4-pro`).
+  - May switch to `--model deepseek-v4-pro` when the user chooses it (a higher-tier model; see the model selection policy in `templates/CLAUDE.template.md`); the sample policy does not automatically swap between `deepseek-flash` and `deepseek-v4-pro` on errors.
 
 ### 5.4. Per-Task Delegation Workflow
 Each time work is delegated to Codex, Gemini, or DeepSeek, the prompt must follow this workflow:
@@ -239,7 +239,7 @@ Each time work is delegated to Codex, Gemini, or DeepSeek, the prompt must follo
   - For Codex and Gemini: based on an initial estimated set of keywords and error codes: `quota`, `usage limit`, `rate limit`, `resource exhausted`, `credits`, and HTTP status codes `429` or `402`.
   - For DeepSeek (Codewhale): treated as out of balance or rate-limited when encountering HTTP `402` (`Insufficient Balance`) or `429` (inferred from API documentation, `[NOT TESTED]` against a live zero-balance error).
 - **Failover order and handoff rules**:
-  1. If a limit error is specific to a single model within the same tool, try switching to the equivalent fallback model first (`deepseek-flash` <-> `deepseek-v4-pro` in Codewhale; equivalent model in `agy`).
+  1. If a limit error is specific to a single model within the same tool, try a lower effort level of the same model first (in `agy`, for example `gemini-3.8-flash-medium`; Codewhale only offers `deepseek-flash` within the self-selectable range, so on balance exhaustion treat the session as exhausted rather than switching to `deepseek-v4-pro`).
   2. When the entire tool hits quota or balance exhaustion, Claude transfers the unfinished portion intact to a remaining execution session matched to the task's strengths: code/test/review tasks prioritize `Codex <-> Gemini (Opus/Argon) <-> DeepSeek`; long-context/summarization/documentation/cross-check tasks prioritize `Gemini <-> DeepSeek <-> Codex`.
   3. If all execution sessions are out of quota or balance, Claude performs the work itself and clearly informs the user. Quota exhaustion does not alter security boundaries: restricted tasks are still never delegated automatically.
 - **Verification status**: The quota failover workflow between Codex and Gemini is reported by the maintainer as having been used in practice across two working days (`[REPORTED]`, with no logs retained in this repo); the `402`/`429` classification branch in `src/deepseek-exec.mjs` is verified using a fake `codewhale` script (`[VERIFIED]`), while live DeepSeek zero-balance exhaustion remains `[NOT TESTED]`.

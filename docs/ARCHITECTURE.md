@@ -220,7 +220,7 @@ Cấu hình chọn model mặc định theo loại công việc (có thể đi�
 - **Codex**: Giữ nguyên model theo cấu hình mặc định.
 - **DeepSeek (`codewhale`)**:
   - Mặc định `deepseek-flash` (DeepSeek V4.1 Flash, ngữ cảnh 1M token, đầu ra tối đa 384K token) cho tốc độ nhanh và chi phí thấp.
-  - Đổi sang `--model deepseek-v4-pro` khi cần lập luận sâu hơn, hoặc dùng làm model dự phòng qua lại (`deepseek-flash` <-> `deepseek-v4-pro`).
+  - Có thể đổi sang `--model deepseek-v4-pro` khi người dùng chọn (model hạng cao hơn, xem chính sách chọn model trong `templates/CLAUDE.template.md`); chính sách mẫu không tự đổi qua lại giữa `deepseek-flash` và `deepseek-v4-pro` khi gặp lỗi.
 
 ### 5.4. Quy trình mỗi lần giao việc
 Mỗi lần giao việc cho Codex, Gemini hoặc DeepSeek, lời nhắc phải tuân thủ quy trình:
@@ -239,7 +239,7 @@ Mỗi lần giao việc cho Codex, Gemini hoặc DeepSeek, lời nhắc phải t
   - Với Codex và Gemini: dựa trên tập từ khóa ước đoán ban đầu gồm `quota`, `usage limit`, `rate limit`, `resource exhausted`, `credits`, mã HTTP `429` hoặc `402`.
   - Với DeepSeek (Codewhale): coi là hết tiền hoặc chạm giới hạn khi gặp lỗi HTTP `402` (`Insufficient Balance`) hoặc `429` (suy đoán từ tài liệu API, `[CHƯA KIỂM]` với lỗi thật khi tài khoản cạn tiền).
 - **Thứ tự dự phòng và quy tắc chuyển việc**:
-  1. Nếu lỗi giới hạn chỉ xảy ra trên một model trong cùng công cụ, thử đổi sang model dự phòng tương đương trước (`deepseek-flash` <-> `deepseek-v4-pro` trong Codewhale; đổi model tương đương trong `agy`).
+  1. Nếu lỗi giới hạn chỉ xảy ra trên một model trong cùng công cụ, thử mức thấp hơn của cùng model trước (trong `agy`, ví dụ `gemini-3.8-flash-medium`; Codewhale trong phạm vi tự chọn chỉ có `deepseek-flash` nên lỗi hết tiền thì coi phiên hết, không tự đổi sang `deepseek-v4-pro`).
   2. Khi cả công cụ gặp lỗi hết quota hoặc hết số dư, Claude chuyển nguyên vẹn phần việc chưa xong sang phiên thực hiện còn lại theo thế mạnh công việc: việc mã/test/review ưu tiên `Codex <-> Gemini (Opus/Argon) <-> DeepSeek`; việc đọc ngữ cảnh dài/tóm tắt/tài liệu/chéo kiểm ưu tiên `Gemini <-> DeepSeek <-> Codex`.
   3. Nếu tất cả các phiên thực hiện đều hết quota hoặc hết số dư, Claude tự thực hiện phần việc đó và thông báo rõ cho người dùng. Việc hết quota không làm thay đổi ranh giới bảo mật: các việc thuộc nhóm hạn chế vẫn không được tự động giao đi.
 - **Trạng thái kiểm chứng**: Cơ chế chuyển việc giữa Codex và Gemini khi hết quota được người bảo trì báo cáo là đã sử dụng thực tế trong hai ngày làm việc (`[BÁO CÁO]`, không có nhật ký lưu trong repo); nhánh phân loại `402`/`429` của `src/deepseek-exec.mjs` đã kiểm bằng script `codewhale` giả (`[ĐÃ KIỂM]`), còn tình huống tài khoản DeepSeek cạn tiền thật ở trạng thái `[CHƯA KIỂM]`.
