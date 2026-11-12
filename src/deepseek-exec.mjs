@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Bọc lệnh `codewhale exec` cho phiên thực hiện DeepSeek:
-// - Chuyển vào thư mục làm việc (--cwd) vì codewhale không có cờ -C.
+// - Chạy trong thư mục làm việc (--cwd) bằng cwd của tiến trình con (codewhale cũng có cờ toàn cục -C đặt trước exec).
 // - Đọc lời nhắc từ tệp (--prompt-file) hoặc chuỗi (--prompt), đặt mọi cờ trước `--` và lời nhắc sau `--`.
 // - Nếu tệp lời nhắc dài quá ngưỡng dòng lệnh (24.000 ký tự), tự truyền lời nhắc dặn đọc tệp đó.
 // - Phân loại kết quả: ok (mã thoát 0), quota_or_balance (402/429, mã thoát 3), other_error (mã thoát 1).
